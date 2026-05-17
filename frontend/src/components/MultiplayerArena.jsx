@@ -1,0 +1,266 @@
+import React, { useState, useEffect, useRef } from "react";
+import { io } from "socket.io-client";
+import { useAuth } from "../context/AuthContext";
+import RaceRoom from "./RaceRoom";
+
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5001";
+
+const MultiplayerArena = () => {
+  const { token } = useAuth();
+  const socketRef = useRef(null);
+
+  const [screen, setScreen] = useState("lobby");
+  const [room, setRoom] = useState(null);
+  const [results, setResults] = useState(null);
+  const [players, setPlayers] = useState(new Map());
+  const [error, setError] = useState("");
+
+  const [mode, setMode] = useState("words");
+  const [value, setValue] = useState(25);
+  const [includePunctuation, setIncludePunctuation] = useState(false);
+  const [includeNumbers, setIncludeNumbers] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+
+  const modeOptions = mode === "time" ? [15, 30, 60, 120] : [10, 25, 50, 100];
+
+  useEffect(() => {
+    const socket = io(SOCKET_URL, {
+      transports: ["websocket"],
+      auth: { token },
+    });
+    socketRef.current = socket;
+
+    socket.on("room-created", (roomData) => {
+      setRoom(roomData);
+      setPlayers(buildPlayersMap(roomData));
+      setScreen("room");
+    });
+
+    socket.on("room-updated", (roomData) => {
+      setRoom(roomData);
+      setPlayers(buildPlayersMap(roomData));
+      setScreen("room");
+    });
+
+    socket.on("race-started", (roomData) => {
+      setRoom(roomData);
+      setPlayers(buildPlayersMap(roomData));
+      setScreen("race");
+    });
+
+    socket.on("progress-update", ({ playerId, progress, wpm, accuracy }) => {
+      setPlayers((prev) => {
+        const updated = new Map(prev);
+        const p = updated.get(playerId);
+        if (p) updated.set(playerId, { ...p, progress, wpm, accuracy });
+        return updated;
+      });
+    });
+
+    socket.on("player-finished", ({ playerId, wpm, accuracy }) => {
+      setPlayers((prev) => {
+        const updated = new Map(prev);
+        const p = updated.get(playerId);
+        if (p)
+          updated.set(playerId, {
+            ...p,
+            finished: true,
+            wpm,
+            accuracy,
+            progress: 100,
+          });
+        return updated;
+      });
+    });
+
+    socket.on("race-over", (resultsData) => {
+      setResults(resultsData);
+      setScreen("results");
+    });
+
+    socket.on("room-error", ({ message }) => {
+      setError(message);
+      setTimeout(() => setError(""), 3000);
+    });
+
+    socket.on("connect_error", (err) => {
+      if (err.message === "AUTH_REQUIRED" || err.message === "AUTH_INVALID") {
+        setError("Authentication failed. Please log in again.");
+      }
+    });
+
+    return () => socket.disconnect();
+  }, [token]);
+
+  const handleCreate = () => {
+    socketRef.current?.emit("create-room", {
+      mode,
+      value,
+      includePunctuation,
+      includeNumbers,
+    });
+  };
+
+  const handleJoin = () => {
+    if (!joinCode.trim()) {
+      setError("Enter a room code");
+      return;
+    }
+    socketRef.current?.emit("join-room", {
+      code: joinCode.trim().toUpperCase(),
+    });
+  };
+
+  const handleLeave = () => {
+    setScreen("lobby");
+    setRoom(null);
+    setResults(null);
+    setPlayers(new Map());
+    setJoinCode("");
+  };
+
+  if (screen !== "lobby") {
+    return (
+      <RaceRoom
+        socket={socketRef.current}
+        room={room}
+        screen={screen}
+        results={results}
+        players={players}
+        setPlayers={setPlayers}
+        onLeave={handleLeave}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="min-h-screen w-full py-10"
+      style={{ backgroundColor: "#0f1117" }}
+    >
+      <h1
+        className="text-white font-bold text-2xl mb-8"
+        style={{ fontFamily: "'Poppins', sans-serif" }}
+      >
+        Multiplayer Arena
+      </h1>
+
+      {error && (
+        <div className="mb-6 px-4 py-2 bg-red-900/60 border border-red-500 text-red-300 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl">
+        {/* Create Room */}
+        <div
+          className="rounded-xl p-6"
+          style={{ backgroundColor: "#161b22", border: "1px solid #30363d" }}
+        >
+          <h2 className="text-white font-semibold text-lg mb-5 flex items-center gap-2">
+            <span className="text-green-400 text-xl">+</span> Create Room
+          </h2>
+
+          <div className="flex gap-2 mb-4">
+            {["words", "time"].map((m) => (
+              <button
+                key={m}
+                onClick={() => {
+                  setMode(m);
+                  setValue(m === "time" ? 30 : 25);
+                }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                  mode === m
+                    ? "bg-yellow-500 text-black"
+                    : "bg-gray-800 text-gray-400 hover:text-white"
+                }`}
+              >
+                {m === "time" ? "🕐 Time" : "A Words"}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-2 mb-4">
+            {modeOptions.map((v) => (
+              <button
+                key={v}
+                onClick={() => setValue(v)}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
+                  value === v
+                    ? "text-yellow-400 font-bold"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex gap-3 mb-5">
+            <button
+              onClick={() => setIncludePunctuation((p) => !p)}
+              className={`px-3 py-1 rounded-lg text-sm transition-all ${
+                includePunctuation
+                  ? "text-yellow-400"
+                  : "text-gray-500 hover:text-gray-400"
+              }`}
+            >
+              @ punctuation
+            </button>
+            <button
+              onClick={() => setIncludeNumbers((n) => !n)}
+              className={`px-3 py-1 rounded-lg text-sm transition-all ${
+                includeNumbers
+                  ? "text-yellow-400"
+                  : "text-gray-500 hover:text-gray-400"
+              }`}
+            >
+              # numbers
+            </button>
+          </div>
+
+          <button
+            onClick={handleCreate}
+            className="w-full py-2 rounded-lg font-semibold text-black transition-all active:scale-95"
+            style={{ backgroundColor: "#2ea043" }}
+          >
+            + Create Room
+          </button>
+        </div>
+
+        {/* Join Room */}
+        <div
+          className="rounded-xl p-6"
+          style={{ backgroundColor: "#161b22", border: "1px solid #30363d" }}
+        >
+          <h2 className="text-white font-semibold text-lg mb-5 flex items-center gap-2">
+            <span className="text-blue-400 text-xl">→</span> Join Room
+          </h2>
+
+          <input
+            className="w-full bg-gray-900 text-white rounded-lg px-4 py-2 text-sm outline-none border border-gray-700 focus:border-blue-500 mb-4 tracking-widest uppercase font-mono"
+            placeholder="Room Code"
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+            maxLength={6}
+          />
+
+          <button
+            onClick={handleJoin}
+            className="w-full py-2 rounded-lg font-semibold text-white transition-all active:scale-95"
+            style={{ backgroundColor: "#1d6fa4" }}
+          >
+            → Join Room
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function buildPlayersMap(room) {
+  if (!room?.players) return new Map();
+  return new Map(room.players.map((p) => [p.id, p]));
+}
+
+export default MultiplayerArena;
