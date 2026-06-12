@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -10,7 +10,9 @@ import {
   Filler,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { FaMagic } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
+import { getCoaching } from "../services/coach.api";
 
 ChartJS.register(
   CategoryScale,
@@ -27,6 +29,7 @@ const TypingChart = ({
   errors,
   totalTyped,
   accuracy,
+  consistency = 0,
   onRestart,
   mode,
   selectedTime,
@@ -37,6 +40,29 @@ const TypingChart = ({
 
   // Get the very last WPM value for the big display
   const finalWpm = safeWpmData.length > 0 ? safeWpmData[safeWpmData.length - 1].wpm : 0;
+
+  // AI Coach state
+  const [coach, setCoach] = useState({ status: "idle", tips: [], error: "" });
+
+  const runCoach = async () => {
+    setCoach({ status: "loading", tips: [], error: "" });
+    try {
+      const tips = await getCoaching({
+        wpm: finalWpm,
+        accuracy: Math.round(typeof accuracy === "number" ? accuracy : 100),
+        consistency,
+        raw: totalTyped,
+        errors,
+        mode,
+        duration: mode === "time" ? selectedTime : null,
+        wordCount: mode === "words" ? selectedWordCount : null,
+        wpmSeries: safeWpmData.map((d) => d.wpm),
+      });
+      setCoach({ status: "done", tips, error: "" });
+    } catch (err) {
+      setCoach({ status: "error", tips: [], error: err.message });
+    }
+  };
   
   const correctChars = Math.max(0, totalTyped - errors);
   const formattedAccuracy = typeof accuracy === "number" ? accuracy.toFixed(0) : "100";
@@ -48,11 +74,12 @@ const TypingChart = ({
       {
         label: "WPM",
         data: safeWpmData.map((d) => d.wpm),
-        borderColor: "#FACC15",
-        backgroundColor: "rgba(250, 204, 21, 0.1)", // Add fill for better visual
+        borderColor: "#e2b714",
+        backgroundColor: "rgba(226, 183, 20, 0.12)",
         borderWidth: 3,
         pointRadius: 2,
-        tension: 0.3,
+        pointBackgroundColor: "#e2b714",
+        tension: 0.35,
         fill: true,
       },
     ],
@@ -69,75 +96,145 @@ const TypingChart = ({
       }
     },
     scales: {
-      x: { 
-        title: { display: true, text: 'Time (s)', color: '#6B7280' },
-        ticks: { color: "#9CA3AF" }, 
-        grid: { color: "#374151" } 
+      x: {
+        title: { display: true, text: "Time (s)", color: "#6b7688" },
+        ticks: { color: "#6b7688" },
+        grid: { color: "#262e3b" },
       },
       y: {
-        title: { display: true, text: 'WPM', color: '#6B7280' },
-        ticks: { color: "#9CA3AF" },
-        grid: { color: "#374151" },
+        title: { display: true, text: "WPM", color: "#6b7688" },
+        ticks: { color: "#6b7688" },
+        grid: { color: "#262e3b" },
         beginAtZero: true,
       },
     },
   };
 
+  const Stat = ({ label, value, sub }) => (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs uppercase tracking-widest text-sub-alt">
+        {label}
+      </span>
+      <span className="font-mono text-3xl font-semibold tabular-nums text-accent">
+        {value}
+      </span>
+      {sub && <span className="text-xs text-sub">{sub}</span>}
+    </div>
+  );
+
   return (
-    <div className="w-full max-w-7xl mx-auto px-8 py-6 bg-gray-800 rounded-lg shadow-2xl min-h-[calc(100vh-120px)] flex flex-col">
-      {/* STATS HEADER */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div>
-          <div className="text-gray-400 text-xs uppercase mb-2">WPM</div>
-          <div className="text-yellow-400 text-7xl font-bold mb-4">{finalWpm}</div>
-
-          <div className="text-gray-400 text-xs uppercase mb-2">ACC</div>
-          <div className="text-yellow-400 text-6xl font-bold">{formattedAccuracy}%</div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-6">
-            <div>
-              <div className="text-gray-400 text-xs uppercase">raw</div>
-              <div className="text-yellow-400 text-4xl">{totalTyped}</div>
+    <div className="panel mx-auto flex min-h-[calc(100vh-140px)] w-full max-w-7xl flex-col p-8">
+      {/* HERO STATS */}
+      <div className="grid grid-cols-1 gap-8 border-b border-border pb-8 lg:grid-cols-[auto_1fr] lg:items-center">
+        <div className="flex gap-12">
+          <div>
+            <div className="text-xs uppercase tracking-widest text-sub-alt">
+              wpm
             </div>
-            <div>
-              <div className="text-gray-400 text-xs uppercase">characters</div>
-              <div className="text-yellow-400 text-xl">
-                {correctChars}/{errors}/0/0
-              </div>
-            </div>
-            <div>
-              <div className="text-gray-400 text-xs uppercase">time</div>
-              <div className="text-yellow-400 text-4xl">
-                {mode === "time" ? `${selectedTime}s` : `${selectedWordCount}w`}
-              </div>
+            <div className="font-mono text-7xl font-bold leading-none text-accent">
+              {finalWpm}
             </div>
           </div>
+          <div>
+            <div className="text-xs uppercase tracking-widest text-sub-alt">
+              accuracy
+            </div>
+            <div className="font-mono text-7xl font-bold leading-none text-accent">
+              {formattedAccuracy}%
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-6 sm:grid-cols-4 lg:justify-items-end">
+          <Stat label="raw" value={totalTyped} />
+          <Stat
+            label="characters"
+            value={`${correctChars}/${errors}`}
+            sub="correct / errors"
+          />
+          <Stat
+            label={mode === "time" ? "time" : "words"}
+            value={mode === "time" ? `${selectedTime}s` : `${selectedWordCount}`}
+          />
+          <Stat label="mode" value={mode} />
         </div>
       </div>
 
       {/* CHART AREA */}
-      <div className="mt-auto flex-grow min-h-[300px]">
+      <div className="mt-6 min-h-[300px] flex-grow">
         <Line data={chartData} options={chartOptions} />
       </div>
 
+      {/* AI COACH */}
+      <div className="mt-6">
+        {coach.status === "idle" && (
+          <div className="flex justify-center">
+            <button
+              onClick={runCoach}
+              className="flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent/20"
+            >
+              <FaMagic /> Get AI coaching
+            </button>
+          </div>
+        )}
+
+        {coach.status === "loading" && (
+          <div className="flex items-center justify-center gap-3 text-sub-alt">
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            analyzing your run…
+          </div>
+        )}
+
+        {coach.status === "error" && (
+          <div className="text-center text-sm text-sub-alt">
+            Coaching unavailable right now.{" "}
+            <button
+              onClick={runCoach}
+              className="text-accent underline-offset-4 hover:underline"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {coach.status === "done" && (
+          <div className="view-enter rounded-2xl border border-border bg-surface-2 p-5">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-accent">
+              <FaMagic /> AI Coach
+            </div>
+            <ul className="space-y-2">
+              {coach.tips.map((tip, i) => (
+                <li key={i} className="flex gap-3 text-sm text-text">
+                  <span className="text-accent">▹</span>
+                  <span>{tip}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
       {/* CONTROLS */}
-      <div className="flex justify-center mt-6">
-        <button className="text-gray-500 text-2xl hover:text-yellow-400 transition-colors" onClick={onRestart}>
+      <div className="mt-6 flex justify-center">
+        <button
+          onClick={onRestart}
+          title="Next test"
+          aria-label="Next test"
+          className="grid h-11 w-16 place-items-center rounded-xl text-2xl text-sub-alt transition-all duration-200 hover:bg-surface-2 hover:text-accent"
+        >
           ↻
         </button>
       </div>
-      
+
       {!isAuthenticated && (
-         <div className="text-center mt-2 text-gray-500 text-sm">
-            <span
-              className="underline cursor-pointer hover:text-yellow-400 transition-colors"
-              onClick={() => setShowAuthModal(true)}
-            >
-              🔒 Login to save your score
-            </span>
-          </div>
+        <div className="mt-3 text-center text-sm text-sub-alt">
+          <button
+            className="underline-offset-4 transition-colors hover:text-accent hover:underline"
+            onClick={() => setShowAuthModal(true)}
+          >
+            🔒 Log in to save your score
+          </button>
+        </div>
       )}
     </div>
   );

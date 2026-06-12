@@ -28,7 +28,7 @@ const Leaderboard = () => {
 
   return (
     <div
-      className="flex w-full bg-gray-900 text-white"
+      className="flex w-full text-text"
       style={{ minHeight: "calc(100vh - 88px)" }}
     >
       {/* ── Sidebar ── */}
@@ -43,8 +43,8 @@ const Leaderboard = () => {
             className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-150 w-full text-left
               ${
                 selectedDuration === time
-                  ? "bg-yellow-400 text-black"
-                  : "text-gray-400 hover:bg-gray-800 hover:text-white"
+                  ? "bg-accent text-[#0e1116]"
+                  : "text-sub-alt hover:bg-surface-2 hover:text-text"
               }`}
           >
             <span>🕐</span>
@@ -55,11 +55,8 @@ const Leaderboard = () => {
 
       {/* ── Main card ── */}
       <div
-        className="flex-1 py-8 px-10 overflow-auto rounded-2xl"
-        style={{
-          background: "#151a25",
-          margin: "16px 24px 24px 0",
-        }}
+        className="panel flex-1 overflow-auto px-10 py-8"
+        style={{ margin: "16px 24px 24px 0" }}
       >
         {/* Title */}
         <h1 className="text-2xl font-bold text-gray-200 mb-8 tracking-wide">

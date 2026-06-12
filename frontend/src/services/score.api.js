@@ -1,4 +1,6 @@
-const API_URL = "http://localhost:5001/api/scores";
+import { API_BASE } from "../config";
+
+const API_URL = `${API_BASE}/api/scores`;
 
 export const getLeaderboard = async (duration) => {
   const res = await fetch(`${API_URL}?duration=${duration}`);

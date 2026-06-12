@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import "./App.css";
 
 import RestartButton from "./components/RestartButton";
@@ -22,9 +22,17 @@ function App() {
   const [mode, setMode] = useState("time");
   const [includePunctuation, setIncludePunctuation] = useState(false);
   const [includeNumbers, setIncludeNumbers] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiTopic, setAiTopic] = useState("");
+  const [aiDifficulty, setAiDifficulty] = useState("medium");
 
   const { isAuthenticated, token } = useAuth();
   const hasSavedScore = useRef(false);
+
+  const ai = useMemo(
+    () => ({ enabled: aiEnabled, topic: aiTopic, difficulty: aiDifficulty }),
+    [aiEnabled, aiTopic, aiDifficulty],
+  );
 
   const {
     state,
@@ -35,11 +43,13 @@ function App() {
     restart,
     totalTyped,
     wpmHistory,
+    loading,
   } = UseEngine(
     mode === "time" ? selectedTime : selectedWordCount,
     mode,
     includePunctuation,
     includeNumbers,
+    ai,
   );
 
   const wordsTyped = typed
@@ -97,44 +107,48 @@ function App() {
     }
   };
 
-  const CountdownTimer = ({ timeLeft }) => (
-    <h2 className="text-yellow-400 font-semibold text-xl mb-4">
-      Time: {timeLeft}
-    </h2>
-  );
+  const isRunning = state === "run";
 
-  const WordsCountDisplay = ({ wordsTyped, totalWords }) => (
-    <h2 className="text-yellow-400 font-semibold text-xl mb-4">
-      Words: {wordsTyped}/{totalWords}
-    </h2>
-  );
-
-  const WordsContainer = ({ children }) => (
-    <div className="relative w-full mt-3 leading-relaxed break-normal">
-      {children}
-    </div>
-  );
+  const LiveCounter = () =>
+    mode === "time" ? (
+      <div className="flex items-baseline gap-2 font-mono">
+        <span className="text-4xl font-semibold tabular-nums text-accent">
+          {timeLeft}
+        </span>
+        <span className="text-sm uppercase tracking-widest text-sub">
+          seconds
+        </span>
+      </div>
+    ) : (
+      <div className="flex items-baseline gap-2 font-mono">
+        <span className="text-4xl font-semibold tabular-nums text-accent">
+          {wordsTyped}
+          <span className="text-sub">/{selectedWordCount}</span>
+        </span>
+        <span className="text-sm uppercase tracking-widest text-sub">words</span>
+      </div>
+    );
 
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: "#0f1117" }}>
+    <div className="min-h-screen w-full">
       <NavBar onNavigate={handleNavigate} currentPage={currentPage} />
 
       {currentPage === "leaderboard" ? (
-        <div className="px-6 pb-6">
+        <div className="view-enter mx-auto max-w-7xl px-6 pb-6">
           <Leaderboard />
         </div>
       ) : currentPage === "profile" ? (
-        <div className="px-6 pb-6">
+        <div className="view-enter mx-auto max-w-7xl px-6 pb-6">
           <Profile onNavigate={handleNavigate} />
         </div>
       ) : currentPage === "multiplayer" ? (
-        <div className="px-6 pb-6">
+        <div className="view-enter mx-auto max-w-7xl px-6 pb-6">
           <MultiplayerArena />
         </div>
       ) : (
-        <div className="w-full px-10">
+        <div className="mx-auto w-full max-w-6xl px-6">
           {state !== "finish" ? (
-            <>
+            <div className="flex min-h-[calc(100vh-200px)] flex-col justify-center">
               <ModeSelector
                 onPunctuationChange={setIncludePunctuation}
                 onNumbersChange={setIncludeNumbers}
@@ -146,41 +160,57 @@ function App() {
                 isPunctuationEnabled={includePunctuation}
                 isNumbersEnabled={includeNumbers}
                 mode={mode}
+                aiEnabled={aiEnabled}
+                aiTopic={aiTopic}
+                aiDifficulty={aiDifficulty}
+                onAiToggle={setAiEnabled}
+                onAiTopicChange={setAiTopic}
+                onAiDifficultyChange={setAiDifficulty}
               />
 
-              {mode === "time" ? (
-                <CountdownTimer timeLeft={timeLeft} />
-              ) : (
-                <WordsCountDisplay
-                  wordsTyped={wordsTyped}
-                  totalWords={selectedWordCount}
-                />
-              )}
+              <div className="mb-5 h-10">
+                <LiveCounter />
+              </div>
 
-              <WordsContainer>
+              <div
+                className={`relative w-full rounded-2xl px-2 leading-relaxed break-normal transition-all duration-300 ${
+                  isRunning ? "" : "opacity-95"
+                }`}
+              >
+                {loading && (
+                  <div className="absolute inset-0 z-10 flex items-center gap-3 rounded-2xl bg-base/70 backdrop-blur-sm">
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                    <span className="text-lg text-sub-alt">
+                      generating with AI…
+                    </span>
+                  </div>
+                )}
                 <UserTypings
-                  className="text-3xl"
+                  className="text-4xl"
                   words={words}
                   userInput={typed}
                 />
-              </WordsContainer>
+              </div>
 
               <RestartButton
-                className="mx-auto mt-10 text-slate-500"
+                className="mx-auto mt-12"
                 onRestart={handleRestart}
               />
-            </>
+            </div>
           ) : (
-            <TypingChart
-              wpmData={wpmHistory}
-              errors={errors}
-              totalTyped={totalTyped}
-              accuracy={parseFloat(formattedAccuracy)}
-              onRestart={handleRestart}
-              mode={mode}
-              selectedTime={selectedTime}
-              selectedWordCount={selectedWordCount}
-            />
+            <div className="view-enter">
+              <TypingChart
+                wpmData={wpmHistory}
+                errors={errors}
+                totalTyped={totalTyped}
+                accuracy={parseFloat(formattedAccuracy)}
+                consistency={consistency}
+                onRestart={handleRestart}
+                mode={mode}
+                selectedTime={selectedTime}
+                selectedWordCount={selectedWordCount}
+              />
+            </div>
           )}
         </div>
       )}

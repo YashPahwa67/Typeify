@@ -10,6 +10,7 @@ const useEngine = (
   mode,
   includePunctuation = false,
   includeNumbers = false,
+  ai = { enabled: false, topic: "", difficulty: "medium" },
 ) => {
   const { showAuthModal } = useAuth();
   const [state, setState] = useState("start");
@@ -19,10 +20,11 @@ const useEngine = (
   const wordCount = mode === "words" ? selectedValue : 40;
   const initialTime = mode === "time" ? selectedValue : 30;
 
-  const { words, updateWords, appendWords } = UseWords(
+  const { words, updateWords, appendWords, loading } = UseWords(
     wordCount,
     includePunctuation,
     includeNumbers,
+    ai,
   );
 
   const { timeLeft, startCountdown, resetCountdown } =
@@ -34,6 +36,25 @@ const useEngine = (
 
   const correctCharsRef = useRef(0);
   const totalTypedRef = useRef(totalTyped);
+  const startTimeRef = useRef(null);
+
+  // Record a net-WPM sample at the given elapsed seconds (deduped per second).
+  const recordWpm = useCallback((timeElapsed) => {
+    if (timeElapsed <= 0) return;
+    const second = Math.round(timeElapsed);
+    const netWpm = Math.max(
+      0,
+      Math.round(correctCharsRef.current / 5 / (timeElapsed / 60)),
+    );
+    setWpmHistory((prev) => {
+      const last = prev[prev.length - 1];
+      if (last && last.second === second) {
+        // Replace the sample for this second with the latest value.
+        return [...prev.slice(0, -1), { second, wpm: netWpm }];
+      }
+      return [...prev, { second, wpm: netWpm }];
+    });
+  }, []);
 
   useEffect(() => {
     totalTypedRef.current = totalTyped;
@@ -60,25 +81,16 @@ const useEngine = (
     correctCharsRef.current = Math.max(0, totalTyped - currentErrors);
   }, [typed, words, cursor, totalTyped]);
 
-  // WPM history
+  // WPM history — sampled once per second from a real elapsed clock, so it
+  // works for BOTH time and words modes (words mode has no fixed duration).
   useEffect(() => {
-    if (state === "run" && mode === "time") {
-      const timeElapsed = initialTime - timeLeft;
-
-      if (timeElapsed > 0) {
-        const netWpm = Math.max(
-          0,
-          Math.round(correctCharsRef.current / 5 / (timeElapsed / 60)),
-        );
-
-        setWpmHistory((prev) => {
-          const lastEntry = prev[prev.length - 1];
-          if (lastEntry && lastEntry.second === timeElapsed) return prev;
-          return [...prev, { second: timeElapsed, wpm: netWpm }];
-        });
-      }
-    }
-  }, [timeLeft, state, mode, initialTime]);
+    if (state !== "run") return;
+    const id = setInterval(() => {
+      if (!startTimeRef.current) return;
+      recordWpm((Date.now() - startTimeRef.current) / 1000);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [state, recordWpm]);
 
   // Finish conditions
   useEffect(() => {
@@ -88,12 +100,20 @@ const useEngine = (
     }
   }, [timeLeft, areWordsFinished, state, mode]);
 
+  // Record a final WPM sample at the exact finish time.
+  useEffect(() => {
+    if (state === "finish" && startTimeRef.current) {
+      recordWpm((Date.now() - startTimeRef.current) / 1000);
+    }
+  }, [state, recordWpm]);
+
   // Auto-start
   useEffect(() => {
     if (showAuthModal) return;
     if (isStarting) {
       setState("run");
       startCountdown();
+      startTimeRef.current = Date.now();
     }
   }, [isStarting, startCountdown, showAuthModal]);
 
@@ -104,6 +124,7 @@ const useEngine = (
     setState("start");
     setWpmHistory([]);
     correctCharsRef.current = 0;
+    startTimeRef.current = null;
     updateWords();
     clearTyped();
   }, [resetCountdown, resetTotalTyped, updateWords, clearTyped]);
@@ -111,7 +132,15 @@ const useEngine = (
   useEffect(() => {
     restart();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedValue, mode, includePunctuation, includeNumbers]);
+  }, [
+    selectedValue,
+    mode,
+    includePunctuation,
+    includeNumbers,
+    ai.enabled,
+    ai.topic,
+    ai.difficulty,
+  ]);
 
   const accuracy = calculateAccuracyPercentage(errors, totalTyped);
 
@@ -125,6 +154,7 @@ const useEngine = (
     restart,
     wpmHistory,
     accuracy,
+    loading,
   };
 };
 

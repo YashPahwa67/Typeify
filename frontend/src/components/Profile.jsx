@@ -7,13 +7,15 @@ const StatCard = ({ label, value }) => (
   <motion.div
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
-    className="flex flex-col gap-1 px-8 py-6 rounded-2xl"
-    style={{ background: "#151a25" }}
+    className="flex flex-col gap-1 rounded-2xl border border-border px-8 py-6 transition-colors hover:border-accent/30"
+    style={{ background: "var(--color-surface-2)" }}
   >
-    <span className="text-gray-500 text-xs uppercase tracking-widest">
+    <span className="text-xs uppercase tracking-widest text-sub-alt">
       {label}
     </span>
-    <span className="text-yellow-400 text-3xl font-extrabold">{value}</span>
+    <span className="font-mono text-3xl font-extrabold tabular-nums text-accent">
+      {value}
+    </span>
   </motion.div>
 );
 
@@ -43,10 +45,7 @@ const Profile = ({ onNavigate }) => {
 
   return (
     <div className="px-6 pb-6">
-      <div
-        className="rounded-2xl p-10 w-full"
-        style={{ background: "#151a25" }}
-      >
+      <div className="panel w-full p-10">
         {/* Top Row — Avatar + Name + Logout */}
         <div className="flex items-center justify-between mb-10">
           <div className="flex items-center gap-6">

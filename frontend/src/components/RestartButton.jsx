@@ -16,9 +16,11 @@ const RestartButton = ({ onRestart, className = "" }) => {
     <button
       ref={buttonRef}
       onClick={handleClick}
-      className={`block rounded px-8 py-2 hover:bg-slate-700/50 ${className}`}
+      title="Restart test"
+      aria-label="Restart test"
+      className={`group grid h-11 w-16 place-items-center rounded-xl text-sub-alt transition-all duration-200 hover:bg-surface-2 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${className}`}
     >
-      <MdRefresh className="w-6 h-6" />
+      <MdRefresh className="h-6 w-6 transition-transform duration-300 group-hover:rotate-180" />
     </button>
   );
 };

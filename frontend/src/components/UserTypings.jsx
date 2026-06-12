@@ -50,16 +50,19 @@ const UserTypings = ({ userInput, words, className = "" }) => {
   }, [typed.length]);
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div
+      ref={containerRef}
+      className={`relative font-mono tracking-tight ${className}`}
+    >
       {allChars.map((char, index) => {
         const typedChar = typed[index];
         const isTyped = typedChar !== undefined;
         const isCorrect = typedChar === char;
         const isWrongSpace = char === " " && isTyped && !isCorrect;
 
-        let color = "#4a5568";
-        if (isTyped && isCorrect) color = "#f6d860";
-        if (isTyped && !isCorrect && char !== " ") color = "#ef4444";
+        let color = "var(--color-sub)";
+        if (isTyped && isCorrect) color = "var(--color-accent-soft)";
+        if (isTyped && !isCorrect && char !== " ") color = "var(--color-error)";
 
         return (
           <span

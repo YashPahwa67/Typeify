@@ -10,34 +10,31 @@ const AuthModal = () => {
   if (!showAuthModal) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-[#1f2937] rounded-xl p-6 w-[360px] relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="panel relative w-[360px] p-6">
         {/* Close */}
         <button
           onClick={() => setShowAuthModal(false)}
-          className="absolute top-3 right-4 text-gray-400 hover:text-white"
+          className="absolute right-4 top-3 text-sub-alt transition-colors hover:text-text"
         >
           ✕
         </button>
 
         {/* Tabs */}
-        <div className="flex justify-center gap-6 mb-6">
-          <button
-            className={`${
-              mode === "login" ? "text-yellow-400" : "text-gray-400"
-            }`}
-            onClick={() => setMode("login")}
-          >
-            Login
-          </button>
-          <button
-            className={`${
-              mode === "signup" ? "text-yellow-400" : "text-gray-400"
-            }`}
-            onClick={() => setMode("signup")}
-          >
-            Signup
-          </button>
+        <div className="mb-6 flex justify-center gap-2">
+          {["login", "signup"].map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`rounded-lg px-4 py-1.5 text-sm font-semibold capitalize transition-all ${
+                mode === m
+                  ? "bg-accent/10 text-accent"
+                  : "text-sub-alt hover:text-text"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
         </div>
 
         {mode === "login" ? <Login /> : <Signup />}

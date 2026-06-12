@@ -1,4 +1,40 @@
 import React from "react";
+import { FaAt, FaHashtag, FaClock, FaFont, FaMagic } from "react-icons/fa";
+
+const TOPICS = ["space", "nature", "history", "technology", "sports", "food"];
+const DIFFICULTIES = ["easy", "medium", "hard"];
+
+const Toggle = ({ icon, label, active, onClick }) => (
+  <button
+    onClick={onClick}
+    title={label}
+    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-150
+      ${
+        active
+          ? "text-accent"
+          : "text-sub hover:text-sub-alt"
+      }`}
+  >
+    <span className="text-[0.95em]">{icon}</span>
+    <span>{label}</span>
+  </button>
+);
+
+const Pill = ({ value, active, onClick }) => (
+  <button
+    onClick={onClick}
+    className={`rounded-md px-3 py-1.5 text-sm font-semibold tabular-nums transition-all duration-150
+      ${
+        active
+          ? "text-accent"
+          : "text-sub hover:text-sub-alt"
+      }`}
+  >
+    {value}
+  </button>
+);
+
+const Divider = () => <span className="mx-1 h-5 w-px bg-border" />;
 
 const ModeSelector = ({
   onPunctuationChange,
@@ -11,116 +47,102 @@ const ModeSelector = ({
   isPunctuationEnabled,
   isNumbersEnabled,
   mode,
+  aiEnabled,
+  aiTopic,
+  aiDifficulty,
+  onAiToggle,
+  onAiTopicChange,
+  onAiDifficultyChange,
 }) => {
+  const counts = mode === "time" ? [15, 30, 60, 120] : [10, 25, 50, 100];
+  const selectedCount = mode === "time" ? selectedTime : selectedWordCount;
+  const onCountChange = mode === "time" ? onTimeChange : onWordCountChange;
+
   return (
-    <div className="flex flex-col gap-6 mb-8 py-4">
-      {/* Mode Type Selector */}
-      <div className="flex gap-6 items-center justify-center flex-wrap">
-        <button
-          className={`flex items-center gap-2 bg-transparent border-none cursor-pointer text-base px-3 py-2 transition-all duration-200 font-normal ${
-            isPunctuationEnabled
-              ? "text-yellow-500"
-              : "text-gray-500 opacity-50 hover:text-gray-400"
-          }`}
-          onClick={() => {
-            console.log("Punctuation button clicked");
-            onPunctuationChange(!isPunctuationEnabled);
-          }}
-          title="punctuation"
-        >
-          <span className="text-xl flex items-center">@</span>
-          <span className="text-base">punctuation</span>
-        </button>
+    <div className="mb-10 flex flex-col items-center gap-3">
+      <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-surface px-2.5 py-1.5 shadow-lg shadow-black/20">
+        <Toggle
+          icon={<FaAt />}
+          label="punctuation"
+          active={isPunctuationEnabled}
+          onClick={() => onPunctuationChange(!isPunctuationEnabled)}
+        />
+        <Toggle
+          icon={<FaHashtag />}
+          label="numbers"
+          active={isNumbersEnabled}
+          onClick={() => onNumbersChange(!isNumbersEnabled)}
+        />
 
-        <button
-          className={`flex items-center gap-2 bg-transparent border-none cursor-pointer text-base px-3 py-2 transition-all duration-200 font-normal ${
-            isNumbersEnabled
-              ? "text-yellow-500"
-              : "text-gray-500 opacity-50 hover:text-gray-400"
-          }`}
-          onClick={() => {
-            console.log("Numbers button clicked");
-            onNumbersChange(!isNumbersEnabled);
-          }}
-          title="numbers"
-        >
-          <span className="text-xl flex items-center">#</span>
-          <span className="text-base">numbers</span>
-        </button>
+        <Divider />
 
-        <button
-          className={`flex items-center gap-2 bg-transparent border-none cursor-pointer text-base px-3 py-2 transition-all duration-200 font-normal ${
-            mode === "time"
-              ? "text-yellow-500"
-              : "text-gray-500 hover:text-gray-400"
-          }`}
-          onClick={() => {
-            console.log("Time mode button clicked");
-            onModeChange("time");
-          }}
-          title="time"
-        >
-          <span className="text-xl flex items-center">🕐</span>
-          <span className="text-base">time</span>
-        </button>
+        <Toggle
+          icon={<FaClock />}
+          label="time"
+          active={mode === "time"}
+          onClick={() => onModeChange("time")}
+        />
+        <Toggle
+          icon={<FaFont />}
+          label="words"
+          active={mode === "words"}
+          onClick={() => onModeChange("words")}
+        />
 
-        <button
-          className={`flex items-center gap-2 bg-transparent border-none cursor-pointer text-base px-3 py-2 transition-all duration-200 font-normal ${
-            mode === "words"
-              ? "text-yellow-500"
-              : "text-gray-500 hover:text-gray-400"
-          }`}
-          onClick={() => {
-            console.log("Words mode button clicked");
-            onModeChange("words");
-          }}
-          title="words"
-        >
-          <span className="text-xl flex items-center">A</span>
-          <span className="text-base">words</span>
-        </button>
+        <Divider />
+
+        {counts.map((value) => (
+          <Pill
+            key={value}
+            value={value}
+            active={selectedCount === value}
+            onClick={() => onCountChange(value)}
+          />
+        ))}
+
+        <Divider />
+
+        <Toggle
+          icon={<FaMagic />}
+          label="ai"
+          active={aiEnabled}
+          onClick={() => onAiToggle(!aiEnabled)}
+        />
       </div>
 
-      {/* Time Selector - Show when in time mode */}
-      {mode === "time" && (
-        <div className="flex gap-4 items-center justify-center">
-          {[15, 30, 60, 120].map((time) => (
-            <button
-              key={time}
-              className={`bg-transparent border-none cursor-pointer text-xl px-4 py-2 transition-all duration-200 font-medium min-w-[50px] ${
-                selectedTime === time
-                  ? "text-yellow-500 font-semibold"
-                  : "text-gray-500 hover:text-gray-400"
-              }`}
-              onClick={() => {
-                console.log("Time option clicked:", time);
-                onTimeChange(time);
-              }}
-            >
-              {time}
-            </button>
+      {/* AI options — revealed only when AI text is on */}
+      {aiEnabled && (
+        <div className="view-enter flex flex-wrap items-center justify-center gap-1 rounded-xl border border-accent/30 bg-surface px-2.5 py-1.5">
+          <span className="px-2 text-xs uppercase tracking-widest text-sub-alt">
+            topic
+          </span>
+          {TOPICS.map((t) => (
+            <Pill
+              key={t}
+              value={t}
+              active={aiTopic === t}
+              onClick={() => onAiTopicChange(aiTopic === t ? "" : t)}
+            />
           ))}
-        </div>
-      )}
+          <input
+            value={TOPICS.includes(aiTopic) ? "" : aiTopic}
+            onChange={(e) => onAiTopicChange(e.target.value)}
+            placeholder="custom…"
+            className="w-24 rounded-md bg-surface-2 px-2 py-1 text-sm text-text placeholder-sub focus:outline-none focus:ring-1 focus:ring-accent/40"
+          />
 
-      {/* Word Count Selector - Show when in words mode */}
-      {mode === "words" && (
-        <div className="flex gap-4 items-center justify-center">
-          {[10, 25, 50, 100].map((wordCount) => (
-            <button
-              key={wordCount}
-              className={`bg-transparent border-none cursor-pointer text-xl px-4 py-2 transition-all duration-200 font-medium min-w-[50px] ${
-                selectedWordCount === wordCount
-                  ? "text-yellow-500 font-semibold"
-                  : "text-gray-500 hover:text-gray-400"
-              }`}
-              onClick={() => {
-                console.log("Word count option clicked:", wordCount);
-                onWordCountChange(wordCount);
-              }}
-            >
-              {wordCount}
-            </button>
+          <Divider />
+
+          <span className="px-2 text-xs uppercase tracking-widest text-sub-alt">
+            level
+          </span>
+          {DIFFICULTIES.map((d) => (
+            <Pill
+              key={d}
+              value={d}
+              active={aiDifficulty === d}
+              onClick={() => onAiDifficultyChange(d)}
+            />
           ))}
         </div>
       )}

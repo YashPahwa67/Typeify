@@ -1,16 +1,120 @@
+@import url("https://fonts.googleapis.com/css2?family=Lexend+Deca:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────
+   Design tokens — one source of truth for the
+   whole app. Registered with @theme so Tailwind
+   generates utilities (bg-base, text-accent, …).
+   Palette: refined warm-amber on a calm
+   slate-dark surface system.
+   ───────────────────────────────────────────── */
+@theme {
+  --color-base: #0e1116; /* page background          */
+  --color-surface: #161b24; /* cards / panels         */
+  --color-surface-2: #1d2430; /* elevated / hovered   */
+  --color-border: #262e3b; /* hairlines              */
+
+  --color-sub: #4a5366; /* untyped text / muted      */
+  --color-sub-alt: #6b7688; /* secondary labels       */
+  --color-text: #c9d1dc; /* primary text             */
+
+  --color-accent: #e2b714; /* brand amber             */
+  --color-accent-soft: #f6d860; /* lighter amber      */
+  --color-correct: #e2b714; /* correctly typed char   */
+  --color-error: #e6584a; /* mistyped char            */
+
+  --font-sans: "Lexend Deca", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply min-h-screen bg-[#0f1117] font-mono tracking-wider;
     margin: 0;
     padding: 0;
     width: 100%;
+    min-height: 100vh;
+    background-color: var(--color-base);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   #root {
     width: 100%;
     min-height: 100vh;
-    background-color: #0f1117;
+    /* subtle radial glow behind everything */
+    background:
+      radial-gradient(
+        1100px 600px at 50% -10%,
+        rgba(226, 183, 20, 0.06),
+        transparent 70%
+      ),
+      var(--color-base);
+  }
+
+  ::selection {
+    background: rgba(226, 183, 20, 0.28);
+    color: #fff;
+  }
+
+  /* Refined scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-surface-2) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-surface-2);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border);
+    background-clip: padding-box;
+  }
+
+  button {
+    font-family: inherit;
+  }
+}
+
+/* ─────────────────────────────────────────────
+   Reusable component utilities
+   ───────────────────────────────────────────── */
+@layer components {
+  /* Bordered surface used by every panel */
+  .panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    box-shadow:
+      0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
+      0 20px 50px -20px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Animated entrance for routed views */
+  .view-enter {
+    animation: viewIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes viewIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
