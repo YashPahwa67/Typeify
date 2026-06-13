@@ -1,6 +1,8 @@
 import React, { useRef, useLayoutEffect, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
+const LINE_HEIGHT = 1.6; // unitless; also drives the 3-line viewport height
+
 const UserTypings = ({ userInput, words, className = "" }) => {
   const charRefs = useRef([]);
   const containerRef = useRef(null);
@@ -14,45 +16,48 @@ const UserTypings = ({ userInput, words, className = "" }) => {
     const container = containerRef.current;
     if (!container) return;
 
-    const containerRect = container.getBoundingClientRect();
+    const ref =
+      index === 0 ? charRefs.current[0] : charRefs.current[index - 1];
+    if (!ref) return;
 
-    if (index === 0) {
-      const first = charRefs.current[0];
-      if (first) {
-        const r = first.getBoundingClientRect();
-        setCaretPos({
-          left: r.left - containerRect.left,
-          top: r.top - containerRect.top,
-          height: r.height,
-        });
-      }
-      return;
-    }
+    const cRect = container.getBoundingClientRect();
+    const rRect = ref.getBoundingClientRect();
+    const scroll = container.scrollTop;
 
-    const prev = charRefs.current[index - 1];
-    if (prev) {
-      const r = prev.getBoundingClientRect();
-      setCaretPos({
-        left: r.right - containerRect.left,
-        top: r.top - containerRect.top,
-        height: r.height,
-      });
+    // Content-relative coords (independent of current scroll) so the caret
+    // stays glued to its character as the viewport scrolls.
+    const top = rRect.top - cRect.top + scroll;
+    const left = (index === 0 ? rRect.left : rRect.right) - cRect.left;
+    setCaretPos({ left, top, height: rRect.height });
+
+    // Keep the active line as the middle of the 3-line viewport: scroll so
+    // exactly one line stays visible above the caret.
+    const desired = Math.max(0, top - rRect.height);
+    if (Math.abs(container.scrollTop - desired) > 1) {
+      container.scrollTop = desired;
     }
   };
 
   useLayoutEffect(() => {
     measureCaret();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typed.length, words]);
 
   useEffect(() => {
     window.addEventListener("resize", measureCaret);
     return () => window.removeEventListener("resize", measureCaret);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typed.length]);
 
   return (
     <div
       ref={containerRef}
       className={`relative font-mono tracking-tight ${className}`}
+      style={{
+        lineHeight: LINE_HEIGHT,
+        height: `${LINE_HEIGHT * 3}em`,
+        overflow: "hidden",
+      }}
     >
       {allChars.map((char, index) => {
         const typedChar = typed[index];

@@ -29,7 +29,7 @@ const NavBar = ({ onNavigate, currentPage }) => {
 
   return (
     <>
-      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-8 py-6">
+      <nav className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-5 sm:px-8 sm:py-6">
         <button
           onClick={() => onNavigate("home")}
           className="group flex items-center gap-3"

@@ -205,7 +205,7 @@ function App() {
                   </div>
                 )}
                 <UserTypings
-                  className="text-4xl"
+                  className="text-2xl sm:text-3xl md:text-4xl"
                   words={words}
                   userInput={typed}
                 />
