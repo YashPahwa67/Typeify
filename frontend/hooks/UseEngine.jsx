@@ -30,9 +30,8 @@ const useEngine = (
   const { timeLeft, startCountdown, resetCountdown } =
     UseCountdownTimer(initialTime);
 
-  const { typed, cursor, clearTyped, resetTotalTyped, totalTyped } = UseTyping(
-    state !== "finish" && !showAuthModal,
-  );
+  const { typed, cursor, clearTyped, resetTotalTyped, totalTyped, inputRef, focusInput } =
+    UseTyping(state !== "finish" && !showAuthModal);
 
   const correctCharsRef = useRef(0);
   const totalTypedRef = useRef(totalTyped);
@@ -155,6 +154,8 @@ const useEngine = (
     wpmHistory,
     accuracy,
     loading,
+    inputRef,
+    focusInput,
   };
 };
 

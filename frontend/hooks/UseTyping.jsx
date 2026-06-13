@@ -1,30 +1,75 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isKeyboardCodeAllowed } from "../utilty/helper";
 
 const UseTyping = (enabled) => {
   const [cursor, setCursor] = useState(0);
   const [typed, setTyped] = useState("");
-  // FIX: Changed from useRef to useState so updates trigger re-renders
   const [totalTyped, setTotalTyped] = useState(0);
 
+  // Hidden input that captures typing. Focusing it summons the mobile
+  // on-screen keyboard, and `beforeinput` works reliably across desktop
+  // and mobile keyboards (unlike `keydown`, which Android often reports
+  // as "Unidentified").
+  const inputRef = useRef(null);
+
+  const insertChar = useCallback((ch) => {
+    setTyped((prev) => prev + ch);
+    setCursor((c) => c + 1);
+    setTotalTyped((prev) => prev + 1);
+  }, []);
+
+  const deleteChar = useCallback(() => {
+    setTyped((prev) => prev.slice(0, -1));
+    setCursor((c) => Math.max(c - 1, 0));
+    setTotalTyped((prev) => Math.max(prev - 1, 0));
+  }, []);
+
+  // Primary capture: `beforeinput` on the focused hidden input.
+  const handleBeforeInput = useCallback(
+    (e) => {
+      if (!enabled) return;
+      const { inputType, data } = e;
+
+      if (
+        inputType === "insertText" ||
+        inputType === "insertCompositionText" ||
+        inputType === "insertFromPaste"
+      ) {
+        if (data) {
+          for (const ch of data) {
+            // ignore newlines; keep only printable characters + space
+            if (ch === "\n" || ch === "\r") continue;
+            insertChar(ch);
+          }
+        }
+      } else if (
+        inputType === "deleteContentBackward" ||
+        inputType === "deleteWordBackward"
+      ) {
+        deleteChar();
+      }
+
+      // We fully manage state ourselves; keep the input empty.
+      if (e.cancelable) e.preventDefault();
+    },
+    [enabled, insertChar, deleteChar],
+  );
+
+  // Desktop fallback: a hardware keyboard fires keydown. Only used when the
+  // hidden input is NOT focused, so it never double-counts with beforeinput.
   const keydownHandler = useCallback(
     ({ key, code }) => {
-      if (!enabled || !isKeyboardCodeAllowed(code)) return;
+      if (!enabled) return;
+      if (document.activeElement === inputRef.current) return; // input handles it
+      if (!isKeyboardCodeAllowed(code)) return;
 
       if (key === "Backspace") {
-        setTyped((prev) => prev.slice(0, -1));
-        setCursor((c) => Math.max(c - 1, 0));
-        setTotalTyped((prev) => Math.max(prev - 1, 0));
+        deleteChar();
         return;
       }
-
-      if (key.length === 1) {
-        setTyped((prev) => prev + key);
-        setCursor((c) => c + 1);
-        setTotalTyped((prev) => prev + 1);
-      }
+      if (key.length === 1) insertChar(key);
     },
-    [enabled]
+    [enabled, insertChar, deleteChar],
   );
 
   const clearTyped = useCallback(() => {
@@ -36,10 +81,28 @@ const UseTyping = (enabled) => {
     setTotalTyped(0);
   }, []);
 
+  // Keep the hidden input focused so the keyboard stays open while a test
+  // is active. Re-focus on blur unless typing is disabled (finished/modal).
+  const focusInput = useCallback(() => {
+    if (enabled && inputRef.current) inputRef.current.focus();
+  }, [enabled]);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.addEventListener("beforeinput", handleBeforeInput);
+    return () => el.removeEventListener("beforeinput", handleBeforeInput);
+  }, [handleBeforeInput]);
+
   useEffect(() => {
     window.addEventListener("keydown", keydownHandler);
     return () => window.removeEventListener("keydown", keydownHandler);
   }, [keydownHandler]);
+
+  // Focus on enable (e.g. when a fresh test starts).
+  useEffect(() => {
+    if (enabled) focusInput();
+  }, [enabled, focusInput]);
 
   return {
     typed,
@@ -47,6 +110,8 @@ const UseTyping = (enabled) => {
     clearTyped,
     resetTotalTyped,
     totalTyped,
+    inputRef,
+    focusInput,
   };
 };
 

@@ -44,6 +44,8 @@ function App() {
     totalTyped,
     wpmHistory,
     loading,
+    inputRef,
+    focusInput,
   } = UseEngine(
     mode === "time" ? selectedTime : selectedWordCount,
     mode,
@@ -173,10 +175,27 @@ function App() {
               </div>
 
               <div
-                className={`relative w-full rounded-2xl px-2 leading-relaxed break-normal transition-all duration-300 ${
+                onClick={focusInput}
+                className={`relative w-full cursor-text rounded-2xl px-2 leading-relaxed break-normal transition-all duration-300 ${
                   isRunning ? "" : "opacity-95"
                 }`}
               >
+                {/* Hidden input — focusing it opens the mobile keyboard and
+                    captures typing via beforeinput (see UseTyping). */}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  aria-label="Typing input"
+                  value=""
+                  onChange={() => {}}
+                  className="absolute inset-0 z-20 h-full w-full cursor-text opacity-0"
+                  style={{ caretColor: "transparent" }}
+                />
                 {loading && (
                   <div className="absolute inset-0 z-10 flex items-center gap-3 rounded-2xl bg-base/70 backdrop-blur-sm">
                     <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
