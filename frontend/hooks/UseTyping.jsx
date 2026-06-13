@@ -11,6 +11,10 @@ const UseTyping = (enabled) => {
   // and mobile keyboards (unlike `keydown`, which Android often reports
   // as "Unidentified").
   const inputRef = useRef(null);
+  // Timestamps used to dedupe a single backspace that may arrive via BOTH
+  // keydown and beforeinput (e.g. on desktop / iOS).
+  const lastKeydownDeleteRef = useRef(0);
+  const lastInputDeleteRef = useRef(0);
 
   const insertChar = useCallback((ch) => {
     setTyped((prev) => prev + ch);
@@ -46,7 +50,11 @@ const UseTyping = (enabled) => {
         inputType === "deleteContentBackward" ||
         inputType === "deleteWordBackward"
       ) {
-        deleteChar();
+        // Skip if a keydown Backspace just handled this same press.
+        if (Date.now() - lastKeydownDeleteRef.current > 60) {
+          lastInputDeleteRef.current = Date.now();
+          deleteChar();
+        }
       }
 
       // We fully manage state ourselves; keep the input empty.
@@ -55,18 +63,27 @@ const UseTyping = (enabled) => {
     [enabled, insertChar, deleteChar],
   );
 
-  // Desktop fallback: a hardware keyboard fires keydown. Only used when the
-  // hidden input is NOT focused, so it never double-counts with beforeinput.
+  // Backspace is reported reliably via keydown on every platform (including
+  // Android/iOS virtual keyboards, where beforeinput "delete" often doesn't
+  // fire on an empty input). Letter inserts are left to beforeinput so they
+  // aren't double-counted when the input is focused.
   const keydownHandler = useCallback(
     ({ key, code }) => {
       if (!enabled) return;
-      if (document.activeElement === inputRef.current) return; // input handles it
-      if (!isKeyboardCodeAllowed(code)) return;
 
       if (key === "Backspace") {
-        deleteChar();
+        // Skip if a beforeinput delete just handled this press.
+        if (Date.now() - lastInputDeleteRef.current > 60) {
+          lastKeydownDeleteRef.current = Date.now();
+          deleteChar();
+        }
         return;
       }
+
+      // Inserts via keydown only when the hidden input ISN'T focused
+      // (otherwise beforeinput already handles them).
+      if (document.activeElement === inputRef.current) return;
+      if (!isKeyboardCodeAllowed(code)) return;
       if (key.length === 1) insertChar(key);
     },
     [enabled, insertChar, deleteChar],
