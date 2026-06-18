@@ -1,31 +1,13 @@
-import nodemailer from "nodemailer";
-
-let transporter = null;
-
 /**
- * Lazily build a Gmail SMTP transporter from env credentials.
- *   EMAIL_USER — the sending Gmail address
- *   EMAIL_PASS — a Gmail App Password (NOT the normal account password;
- *                requires 2-Step Verification — https://myaccount.google.com/apppasswords)
+ * Email via Brevo's transactional HTTP API.
+ *   BREVO_API_KEY — Brevo → SMTP & API → API Keys (starts with "xkeysib-").
+ *   EMAIL_FROM    — a verified sender address (Brevo → Senders & IPs).
+ *   EMAIL_FROM_NAME — optional display name (defaults to "Typeify").
+ * Unlike Gmail App Passwords, Brevo API keys aren't revoked by Google and
+ * are built for sending from cloud IPs (Render, etc.). Uses the built-in
+ * fetch (Node 18+), so no extra dependency is needed.
  */
-const getTransporter = () => {
-  if (transporter) return transporter;
-
-  const { EMAIL_USER, EMAIL_PASS } = process.env;
-  if (!EMAIL_USER || !EMAIL_PASS) {
-    throw new Error(
-      "Email is not configured. Set EMAIL_USER and EMAIL_PASS (Gmail App Password) in backend/.env",
-    );
-  }
-
-  transporter = nodemailer.createTransport({
-    service: "gmail",
-    // Gmail App Passwords are shown in 4-char groups; strip spaces for SMTP auth.
-    auth: { user: EMAIL_USER, pass: EMAIL_PASS.replace(/\s+/g, "") },
-  });
-
-  return transporter;
-};
+const BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email";
 
 const otpEmailHtml = (intro, code) => `
   <div style="background:#0e1116;padding:40px 0;font-family:'Segoe UI',Arial,sans-serif">
@@ -43,14 +25,33 @@ const otpEmailHtml = (intro, code) => `
   </div>`;
 
 const send = async ({ to, subject, intro, code }) => {
-  const from = process.env.EMAIL_USER;
-  await getTransporter().sendMail({
-    from: `"Typeify" <${from}>`,
-    to,
-    subject,
-    text: `${intro.replace(/<[^>]*>/g, "")} Your code is ${code}. It expires in 10 minutes.`,
-    html: otpEmailHtml(intro, code),
+  const { BREVO_API_KEY, EMAIL_FROM } = process.env;
+  if (!BREVO_API_KEY || !EMAIL_FROM) {
+    throw new Error(
+      "Email is not configured. Set BREVO_API_KEY and EMAIL_FROM (verified Brevo sender) in backend/.env",
+    );
+  }
+
+  const res = await fetch(BREVO_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "api-key": BREVO_API_KEY.trim(),
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender: { name: process.env.EMAIL_FROM_NAME || "Typeify", email: EMAIL_FROM },
+      to: [{ email: to }],
+      subject,
+      textContent: `${intro.replace(/<[^>]*>/g, "")} Your code is ${code}. It expires in 10 minutes.`,
+      htmlContent: otpEmailHtml(intro, code),
+    }),
   });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Brevo send failed (${res.status}): ${detail}`);
+  }
 };
 
 export const sendOtpEmail = (to, code) =>
