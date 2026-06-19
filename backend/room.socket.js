@@ -2,6 +2,7 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import { faker } from "@faker-js/faker"; // same library you already use
+import { generateTypingText } from "./utils/ai.js";
 
 const rooms = new Map();
 
@@ -53,6 +54,8 @@ function serializeRoom(room) {
     value: room.value,
     includePunctuation: room.includePunctuation,
     includeNumbers: room.includeNumbers,
+    aiEnabled: room.aiEnabled,
+    aiDifficulty: room.aiDifficulty,
     status: room.status,
     words: room.status === "running" ? room.words : null, // hidden until race starts
     players: Array.from(room.players.entries()).map(([id, p]) => ({
@@ -100,7 +103,14 @@ export function initSocket(httpServer) {
     // ── CREATE ROOM ─────────────────────────────────────────
     socket.on(
       "create-room",
-      ({ mode, value, includePunctuation, includeNumbers }) => {
+      ({
+        mode,
+        value,
+        includePunctuation,
+        includeNumbers,
+        aiEnabled,
+        aiDifficulty,
+      }) => {
         const code = makeCode();
 
         const room = {
@@ -110,6 +120,10 @@ export function initSocket(httpServer) {
           value: value || 25,
           includePunctuation: includePunctuation || false,
           includeNumbers: includeNumbers || false,
+          aiEnabled: aiEnabled || false,
+          aiDifficulty: ["easy", "medium", "hard"].includes(aiDifficulty)
+            ? aiDifficulty
+            : "medium",
           words: "",
           status: "waiting",
           startedAt: null,
@@ -164,7 +178,7 @@ export function initSocket(httpServer) {
     });
 
     // ── START RACE (host only) ──────────────────────────────
-    socket.on("start-race", () => {
+    socket.on("start-race", async () => {
       const room = rooms.get(socket.data.roomCode);
       if (!room) return;
       if (room.hostId !== socket.id) {
@@ -175,11 +189,34 @@ export function initSocket(httpServer) {
 
       // Generate words ONCE on the server — same string sent to all players
       const wordCount = room.mode === "words" ? room.value : 60;
-      room.words = generateWords(
-        wordCount,
-        room.includePunctuation,
-        room.includeNumbers,
-      );
+
+      if (room.aiEnabled) {
+        try {
+          room.words = await generateTypingText({
+            count: wordCount,
+            difficulty: room.aiDifficulty,
+            includePunctuation: room.includePunctuation,
+            includeNumbers: room.includeNumbers,
+          });
+        } catch (err) {
+          // Gracefully fall back to local word generation if AI is unavailable.
+          console.error("Room AI text failed, using faker:", err.message);
+          room.words = generateWords(
+            wordCount,
+            room.includePunctuation,
+            room.includeNumbers,
+          );
+        }
+      } else {
+        room.words = generateWords(
+          wordCount,
+          room.includePunctuation,
+          room.includeNumbers,
+        );
+      }
+
+      // Room may have been torn down while awaiting AI generation.
+      if (!rooms.has(room.code)) return;
       room.status = "running";
       room.startedAt = Date.now();
 
@@ -245,14 +282,16 @@ export function initSocket(httpServer) {
       }
     });
 
-    // ── DISCONNECT ──────────────────────────────────────────
-    socket.on("disconnect", () => {
+    // ── LEAVE / DISCONNECT ──────────────────────────────────
+    const removeFromRoom = () => {
       const code = socket.data.roomCode;
       if (!code) return;
       const room = rooms.get(code);
       if (!room) return;
 
       room.players.delete(socket.id);
+      socket.leave(code);
+      socket.data.roomCode = null;
 
       if (room.players.size === 0) {
         rooms.delete(code);
@@ -263,7 +302,20 @@ export function initSocket(httpServer) {
         room.hostId = room.players.keys().next().value;
       }
 
+      // If the leaver was the last person still racing, end the race.
+      if (
+        room.status === "running" &&
+        [...room.players.values()].every((p) => p.finished)
+      ) {
+        room.status = "finished";
+        io.to(room.code).emit("race-over", buildResults(room));
+        return;
+      }
+
       io.to(code).emit("room-updated", serializeRoom(room));
-    });
+    };
+
+    socket.on("leave-room", removeFromRoom);
+    socket.on("disconnect", removeFromRoom);
   });
 }

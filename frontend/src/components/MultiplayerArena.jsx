@@ -19,6 +19,8 @@ const MultiplayerArena = () => {
   const [value, setValue] = useState(25);
   const [includePunctuation, setIncludePunctuation] = useState(false);
   const [includeNumbers, setIncludeNumbers] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiDifficulty, setAiDifficulty] = useState("medium");
   const [joinCode, setJoinCode] = useState("");
 
   const modeOptions = mode === "time" ? [15, 30, 60, 120] : [10, 25, 50, 100];
@@ -98,6 +100,8 @@ const MultiplayerArena = () => {
       value,
       includePunctuation,
       includeNumbers,
+      aiEnabled,
+      aiDifficulty,
     });
   };
 
@@ -112,6 +116,7 @@ const MultiplayerArena = () => {
   };
 
   const handleLeave = () => {
+    socketRef.current?.emit("leave-room");
     setScreen("lobby");
     setRoom(null);
     setResults(null);
@@ -217,7 +222,35 @@ const MultiplayerArena = () => {
             >
               # numbers
             </button>
+            <button
+              onClick={() => setAiEnabled((a) => !a)}
+              className={`px-3 py-1 rounded-lg text-sm transition-all ${
+                aiEnabled
+                  ? "text-yellow-400"
+                  : "text-gray-500 hover:text-gray-400"
+              }`}
+            >
+              ✨ ai
+            </button>
           </div>
+
+          {aiEnabled && (
+            <div className="flex gap-2 mb-5">
+              {["easy", "medium", "hard"].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setAiDifficulty(d)}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-all ${
+                    aiDifficulty === d
+                      ? "bg-yellow-500 text-black"
+                      : "bg-gray-800 text-gray-400 hover:text-white"
+                  }`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          )}
 
           <button
             onClick={handleCreate}

@@ -13,7 +13,13 @@ const RaceRoom = ({
   const [typed, setTyped] = useState("");
   const [timeLeft, setTimeLeft] = useState(room?.value || 30);
   const timerRef = useRef(null);
+  const inputRef = useRef(null);
+  // Dedupe a backspace that may arrive via both keydown and beforeinput.
+  const lastKeydownDeleteRef = useRef(0);
+  const lastInputDeleteRef = useRef(0);
   const myId = socket?.id;
+
+  const focusInput = () => inputRef.current?.focus();
 
   // Start timer when race begins
   useEffect(() => {
@@ -35,31 +41,65 @@ const RaceRoom = ({
     if (screen === "race") setTyped("");
   }, [screen]);
 
-  // Keyboard handler
+  // Primary capture: `beforeinput` on the focused hidden input. This works
+  // reliably across desktop AND mobile keyboards (focusing the input also
+  // summons the on-screen keyboard on mobile, unlike a window keydown listener).
+  useEffect(() => {
+    if (screen !== "race") return;
+    const el = inputRef.current;
+    if (!el) return;
+
+    const handleBeforeInput = (e) => {
+      const { inputType, data } = e;
+      if (
+        inputType === "insertText" ||
+        inputType === "insertCompositionText" ||
+        inputType === "insertFromPaste"
+      ) {
+        if (data) {
+          let next = "";
+          for (const ch of data) {
+            if (ch === "\n" || ch === "\r") continue;
+            next += ch;
+          }
+          if (next) setTyped((prev) => prev + next);
+        }
+      } else if (
+        inputType === "deleteContentBackward" ||
+        inputType === "deleteWordBackward"
+      ) {
+        if (Date.now() - lastKeydownDeleteRef.current > 60) {
+          lastInputDeleteRef.current = Date.now();
+          setTyped((prev) => prev.slice(0, -1));
+        }
+      }
+      if (e.cancelable) e.preventDefault();
+    };
+
+    el.addEventListener("beforeinput", handleBeforeInput);
+    return () => el.removeEventListener("beforeinput", handleBeforeInput);
+  }, [screen]);
+
+  // Backspace fires reliably via keydown on every platform (mobile virtual
+  // keyboards often don't emit a `beforeinput` delete on an empty input).
   useEffect(() => {
     if (screen !== "race") return;
 
-    const handleKey = ({ key, code }) => {
-      if (key === "Backspace") {
+    const handleKey = ({ key }) => {
+      if (key !== "Backspace") return;
+      if (Date.now() - lastInputDeleteRef.current > 60) {
+        lastKeydownDeleteRef.current = Date.now();
         setTyped((prev) => prev.slice(0, -1));
-        return;
-      }
-      if (
-        code.startsWith("Key") ||
-        code.startsWith("Digit") ||
-        code === "Space" ||
-        code.startsWith("Quote") ||
-        code.startsWith("Semicolon") ||
-        code.startsWith("Comma") ||
-        code.startsWith("Period") ||
-        code.startsWith("Slash")
-      ) {
-        setTyped((prev) => prev + key);
       }
     };
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
+  }, [screen]);
+
+  // Keep the hidden input focused so the mobile keyboard stays open.
+  useEffect(() => {
+    if (screen === "race") focusInput();
   }, [screen]);
 
   // Emit progress on every keystroke
@@ -200,16 +240,44 @@ const RaceRoom = ({
           ))}
         </div>
 
-        {room?.mode === "time" && (
-          <h2 className="text-yellow-400 font-semibold text-xl mb-4">
-            Time: {timeLeft}
-          </h2>
-        )}
+        <div className="flex items-center justify-between mb-4">
+          {room?.mode === "time" ? (
+            <h2 className="text-yellow-400 font-semibold text-xl">
+              Time: {timeLeft}
+            </h2>
+          ) : (
+            <span />
+          )}
+          <button
+            onClick={onLeave}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all active:scale-95"
+            style={{ backgroundColor: "#b91c1c" }}
+          >
+            ⤶ Leave Room
+          </button>
+        </div>
 
         <div
-          className="rounded-xl p-5"
+          onClick={focusInput}
+          className="relative rounded-xl p-5 cursor-text"
           style={{ backgroundColor: "#161b22", border: "1px solid #30363d" }}
         >
+          {/* Hidden input — focusing it opens the mobile keyboard and
+              captures typing via beforeinput. */}
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            aria-label="Typing input"
+            value=""
+            onChange={() => {}}
+            className="absolute inset-0 z-20 h-full w-full cursor-text opacity-0"
+            style={{ caretColor: "transparent" }}
+          />
           <UserTypings
             words={room?.words || ""}
             userInput={typed}
@@ -247,19 +315,26 @@ const RaceRoom = ({
           </div>
         </div>
 
-        {isHost ? (
+        <div className="flex items-center gap-3">
+          {isHost ? (
+            <button
+              onClick={() => socket?.emit("start-race")}
+              className="px-6 py-2 rounded-lg font-semibold text-black transition-all active:scale-95"
+              style={{ backgroundColor: "#2ea043" }}
+            >
+              ▶ Start Race
+            </button>
+          ) : (
+            <p className="text-gray-500 text-sm">Waiting for host to start…</p>
+          )}
           <button
-            onClick={() => socket?.emit("start-race")}
-            className="px-6 py-2 rounded-lg font-semibold text-black transition-all active:scale-95"
-            style={{ backgroundColor: "#2ea043" }}
+            onClick={onLeave}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all active:scale-95"
+            style={{ backgroundColor: "#b91c1c" }}
           >
-            ▶ Start Race
+            ⤶ Leave
           </button>
-        ) : (
-          <p className="text-gray-500 text-sm mt-2">
-            Waiting for host to start…
-          </p>
-        )}
+        </div>
       </div>
 
       <div
