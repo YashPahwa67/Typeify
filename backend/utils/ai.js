@@ -3,6 +3,50 @@
 
 const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 
+// GPT-OSS models spend completion tokens on reasoning; without these flags
+// the budget can be exhausted before any visible content is returned.
+const groqCompletion = async ({
+  messages,
+  temperature = 0.7,
+  maxCompletionTokens = 2048,
+}) => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    throw new Error("AI is not configured. Set GROQ_API_KEY in backend/.env");
+  }
+
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      temperature,
+      max_completion_tokens: maxCompletionTokens,
+      reasoning_effort: "low",
+      include_reasoning: false,
+      messages,
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Groq API error ${res.status}: ${detail.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const choice = data?.choices?.[0];
+  const raw = choice?.message?.content?.trim() || "";
+
+  if (!raw && choice?.finish_reason === "length") {
+    throw new Error("Empty generation (token limit hit during reasoning)");
+  }
+
+  return raw;
+};
+
 const DIFFICULTY_HINT = {
   easy: "Use only very common, short everyday words (3-6 letters).",
   medium: "Use a natural mix of common and moderately advanced vocabulary.",
@@ -20,11 +64,6 @@ export const generateTypingText = async ({
   includePunctuation = false,
   includeNumbers = false,
 } = {}) => {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    throw new Error("AI is not configured. Set GROQ_API_KEY in backend/.env");
-  }
-
   const wordCount = Math.min(Math.max(Number(count) || 30, 10), 200);
 
   const prompt = [
@@ -40,76 +79,35 @@ export const generateTypingText = async ({
     "Output ONLY the passage text in lowercase — no title, no quotes, no commentary, no markdown.",
   ].join(" ");
 
-  const res = await fetch(
-    "https://api.groq.com/openai/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+  const raw = await groqCompletion({
+    temperature: 1.0,
+    maxCompletionTokens: 2048,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You generate clean text passages for a typing-speed practice app. Follow the formatting rules exactly and output only the passage.",
       },
-      body: JSON.stringify({
-        model: MODEL,
-        temperature: 1.0,
-        max_tokens: 1024,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You generate clean text passages for a typing-speed practice app. Follow the formatting rules exactly and output only the passage.",
-          },
-          { role: "user", content: prompt },
-        ],
-      }),
-    },
-  );
-
-  if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(`Groq API error ${res.status}: ${detail.slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-  const raw = data?.choices?.[0]?.message?.content || "";
+      { role: "user", content: prompt },
+    ],
+  });
 
   // Normalize: lowercase, collapse whitespace/newlines into single spaces.
-  const cleaned = raw.trim().toLowerCase().replace(/\s+/g, " ").trim();
+  const cleaned = raw.toLowerCase().replace(/\s+/g, " ").trim();
   if (!cleaned) throw new Error("Empty generation");
   return cleaned;
 };
 
 // Low-level Groq chat helper (shared by the coach).
-const groqChat = async (system, user, { temperature = 0.7 } = {}) => {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) {
-    throw new Error("AI is not configured. Set GROQ_API_KEY in backend/.env");
-  }
-
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      temperature,
-      max_tokens: 512,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
+const groqChat = async (system, user, { temperature = 0.7 } = {}) =>
+  groqCompletion({
+    temperature,
+    maxCompletionTokens: 1024,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
   });
-
-  if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(`Groq API error ${res.status}: ${detail.slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-  return data?.choices?.[0]?.message?.content || "";
-};
 
 /**
  * Analyze a finished test and return 2-4 short, personalized coaching tips.
