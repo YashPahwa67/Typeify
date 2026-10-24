@@ -1,7 +1,7 @@
 // AI typing-passage generation via Groq (free, fast — Llama models).
 // Get a free API key at https://console.groq.com/keys
 
-const MODEL = process.env.GROQ_MODEL || "llama-3.1-8b-instant";
+const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 
 const DIFFICULTY_HINT = {
   easy: "Use only very common, short everyday words (3-6 letters).",
